@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Amazon Listing Grader — Built for Pixii</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0b;
+    --surface: #111114;
+    --border: #1e1e24;
+    --accent: #ff5c00;
+    --accent2: #ffb800;
+    --text: #f0ede8;
+    --muted: #6b6870;
+    --good: #00c896;
+    --warn: #ffb800;
+    --bad: #ff4444;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(255,92,0,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,92,0,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+
+  /* Header */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255,92,0,0.12);
+    border: 1px solid rgba(255,92,0,0.3);
+    color: var(--accent);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    text-transform: uppercase;
+  }
+
+  .badge::before { content: '●'; font-size: 8px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: clamp(32px, 6vw, 56px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 12px;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .sub {
+    color: var(--muted);
+    font-size: 15px;
+    font-weight: 300;
+    margin-bottom: 40px;
+    line-height: 1.6;
+    max-width: 520px;
+  }
+
+  /* Input area */
+  .input-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+
+  .input-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    padding: 14px 16px;
+    resize: vertical;
+    min-height: 160px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  .row { display: flex; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+
+  input[type="text"] {
+    flex: 1;
+    min-width: 200px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 11px 16px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input[type="text"]:focus { border-color: var(--accent); }
+  input[type="text"]::placeholder { color: var(--muted); }
+
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 11px 28px;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn:hover { transform: translateY(-1px); opacity: 0.92; }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* Loading */
+  .loading {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    padding: 20px 0;
+  }
+
+  .loading.show { display: flex; }
+
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  #results { display: none; }
+  #results.show { display: block; animation: fadeUp 0.4s ease; }
+
+  @keyframes fadeUp { from { opacity:0; transform: translateY(12px); } to { opacity:1; transform: none; } }
+
+  /* Score ring */
+  .score-section {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .score-ring {
+    position: relative;
+    width: 110px;
+    height: 110px;
+    flex-shrink: 0;
+  }
+
+  .score-ring svg { transform: rotate(-90deg); }
+
+  .score-num {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .score-num .num {
+    font-family: 'Syne', sans-serif;
+    font-size: 30px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .score-num .label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .score-info { flex: 1; min-width: 200px; }
+
+  .score-grade {
+    font-family: 'Syne', sans-serif;
+    font-size: 22px;
+    font-weight: 800;
+    margin-bottom: 6px;
+  }
+
+  .score-verdict {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Metrics grid */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .metric-card::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    border-radius: 10px 0 0 10px;
+  }
+
+  .metric-card.good::before { background: var(--good); }
+  .metric-card.warn::before { background: var(--warn); }
+  .metric-card.bad::before  { background: var(--bad); }
+
+  .metric-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .metric-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .metric-card.good .metric-val { color: var(--good); }
+  .metric-card.warn .metric-val { color: var(--warn); }
+  .metric-card.bad  .metric-val { color: var(--bad); }
+
+  .metric-note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.4;
+  }
+
+  /* Sections */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 24px;
+    margin-bottom: 16px;
+  }
+
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title .icon { font-size: 16px; }
+
+  .item {
+    display: flex;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .item:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .item-icon { flex-shrink: 0; font-size: 15px; margin-top: 1px; }
+
+  /* Keywords */
+  .keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .kw {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid;
+  }
+
+  .kw.present { background: rgba(0,200,150,0.1); border-color: rgba(0,200,150,0.3); color: var(--good); }
+  .kw.missing { background: rgba(255,68,68,0.08); border-color: rgba(255,68,68,0.25); color: var(--bad); }
+
+  /* Footer tag */
+  .built-by {
+    margin-top: 48px;
+    text-align: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  .built-by a { color: var(--accent); text-decoration: none; }
+
+  /* Error */
+  .error-msg {
+    background: rgba(255,68,68,0.08);
+    border: 1px solid rgba(255,68,68,0.2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    color: var(--bad);
+    font-size: 13px;
+    font-family: 'DM Mono', monospace;
+    display: none;
+  }
+
+  .error-msg.show { display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="badge">Live Demo · Built for Pixii</div>
+
+  <h1>Amazon Listing<br><span>Grader</span></h1>
+  <p class="sub">Paste any Amazon listing copy. Get an instant score, keyword gaps, and conversion improvements — powered by Claude.</p>
+
+  <div class="input-card">
+    <label class="input-label">Listing Copy (title + bullets + description)</label>
+    <textarea id="listing" placeholder="Paste your Amazon listing copy here...
+
+Example:
+Title: Premium Stainless Steel Water Bottle 32oz - BPA Free, Insulated, Leak Proof - Keeps Cold 24hrs Hot 12hrs - Perfect for Gym, Hiking, Office
+
+• SUPERIOR INSULATION: Double-wall vacuum insulation keeps drinks cold for 24 hours or hot for 12 hours
+• BPA-FREE & SAFE: Made from premium 18/8 stainless steel, completely BPA-free and non-toxic
+• LEAK-PROOF DESIGN: Threaded lid with secure seal, toss it in your bag without worry
+• WIDE MOUTH: Easy to fill, clean, and add ice cubes
+• PERFECT GIFT: Comes in 8 colors, ideal for gym, hiking, camping, office"></textarea>
+    <div class="row">
+      <input type="text" id="category" placeholder="Product category (e.g. Kitchen, Sports, Electronics)" />
+      <button class="btn" onclick="analyzeListing()">Grade Listing →</button>
+    </div>
+  </div>
+
+  <div class="error-msg" id="errMsg"></div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <span id="loadingText">Analyzing listing with Claude...</span>
+  </div>
+
+  <div id="results">
+    <!-- injected by JS -->
+  </div>
+
+  <div class="built-by">
+    Built by <a href="https://linkedin.com/in/shikhabansal7">Shikha Bansal</a> · Powered by Claude API · Made for <a href="#">Pixii</a>
+  </div>
+
+</div>
+
+<script>
+const LOADING_MSGS = [
+  "Analyzing listing with Claude...",
+  "Checking keyword density...",
+  "Scoring conversion factors...",
+  "Identifying gaps...",
+  "Generating recommendations..."
+];
+
+let loadIdx = 0;
+let loadTimer;
+
+function cycleMsgs() {
+  loadIdx = (loadIdx + 1) % LOADING_MSGS.length;
+  document.getElementById('loadingText').textContent = LOADING_MSGS[loadIdx];
+  loadTimer = setTimeout(cycleMsgs, 1800);
+}
+
+function showError(msg) {
+  const el = document.getElementById('errMsg');
+  el.textContent = msg;
+  el.classList.add('show');
+}
+
+function hideError() {
+  document.getElementById('errMsg').classList.remove('show');
+}
+
+function getScoreColor(score) {
+  if (score >= 80) return 'var(--good)';
+  if (score >= 55) return 'var(--warn)';
+  return 'var(--bad)';
+}
+
+function getGrade(score) {
+  if (score >= 85) return { grade: 'A — Elite Listing', color: 'var(--good)' };
+  if (score >= 70) return { grade: 'B — Strong Listing', color: 'var(--good)' };
+  if (score >= 55) return { grade: 'C — Needs Work', color: 'var(--warn)' };
+  if (score >= 40) return { grade: 'D — Weak Listing', color: 'var(--bad)' };
+  return { grade: 'F — Critical Issues', color: 'var(--bad)' };
+}
+
+function getStatusClass(status) {
+  if (status === 'good') return 'good';
+  if (status === 'warn') return 'warn';
+  return 'bad';
+}
+
+function renderRing(score, color) {
+  const r = 48, cx = 55, cy = 55;
+  const circ = 2 * Math.PI * r;
+  const dash = (score / 100) * circ;
+  return `
+    <svg width="110" height="110" viewBox="0 0 110 110">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--border)" stroke-width="8"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${color}" stroke-width="8"
+        stroke-dasharray="${dash} ${circ}" stroke-linecap="round"
+        style="transition: stroke-dasharray 1s ease"/>
+    </svg>`;
+}
+
+function renderResults(data) {
+  const score = data.overall_score;
+  const color = getScoreColor(score);
+  const { grade, color: gradeColor } = getGrade(score);
+
+  const metricsHtml = data.metrics.map(m => `
+    <div class="metric-card ${getStatusClass(m.status)}">
+      <div class="metric-label">${m.label}</div>
+      <div class="metric-val">${m.value}</div>
+      <div class="metric-note">${m.note}</div>
+    </div>
+  `).join('');
+
+  const winsHtml = data.wins.map(w => `
+    <div class="item"><span class="item-icon">✓</span><span>${w}</span></div>
+  `).join('');
+
+  const fixesHtml = data.fixes.map(f => `
+    <div class="item"><span class="item-icon">→</span><span>${f}</span></div>
+  `).join('');
+
+  const kwPresent = (data.keywords_present || []).map(k =>
+    `<span class="kw present">${k}</span>`).join('');
+  const kwMissing = (data.keywords_missing || []).map(k =>
+    `<span class="kw missing">+ ${k}</span>`).join('');
+
+  document.getElementById('results').innerHTML = `
+    <div class="score-section">
+      <div class="score-ring">
+        ${renderRing(score, color)}
+        <div class="score-num">
+          <span class="num" style="color:${color}">${score}</span>
+          <span class="label">/ 100</span>
+        </div>
+      </div>
+      <div class="score-info">
+        <div class="score-grade" style="color:${gradeColor}">${grade}</div>
+        <div class="score-verdict">${data.verdict}</div>
+      </div>
+    </div>
+
+    <div class="metrics">${metricsHtml}</div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">✓</span> What's Working</div>
+      ${winsHtml}
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">→</span> Priority Fixes</div>
+      ${fixesHtml}
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">#</span> Keyword Analysis</div>
+      <div style="margin-bottom:10px;font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;">DETECTED</div>
+      <div class="keywords" style="margin-bottom:16px">${kwPresent || '<span style="color:var(--muted);font-size:13px">None identified</span>'}</div>
+      <div style="margin-bottom:10px;font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;">MISSING OPPORTUNITIES</div>
+      <div class="keywords">${kwMissing || '<span style="color:var(--muted);font-size:13px">Good coverage</span>'}</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title"><span class="icon">✦</span> Pixii Would Fix This In 2 Minutes</div>
+      <div class="item"><span class="item-icon">→</span><span style="color:var(--muted)">${data.pixii_pitch}</span></div>
+    </div>
+  `;
+
+  document.getElementById('results').classList.add('show');
+}
+
+async function analyzeListing() {
+  const listing = document.getElementById('listing').value.trim();
+  const category = document.getElementById('category').value.trim();
+
+  if (!listing || listing.length < 50) {
+    showError('Please paste a listing with at least a title and 2–3 bullet points.');
+    return;
+  }
+
+  hideError();
+  document.getElementById('results').classList.remove('show');
+  document.querySelector('.btn').disabled = true;
+  document.getElementById('loading').classList.add('show');
+  loadIdx = 0;
+  document.getElementById('loadingText').textContent = LOADING_MSGS[0];
+  loadTimer = setTimeout(cycleMsgs, 1800);
+
+  const prompt = `You are an Amazon listing optimization expert. Analyze this Amazon product listing and return a JSON object only — no markdown, no explanation, just pure JSON.
+
+Listing:
+${listing}
+
+Category: ${category || 'General'}
+
+Return this exact JSON structure:
+{
+  "overall_score": <integer 0-100>,
+  "verdict": "<2-3 sentence overall verdict on this listing's conversion potential>",
+  "metrics": [
+    {"label": "Title Strength", "value": "<score or rating>", "note": "<brief note>", "status": "good|warn|bad"},
+    {"label": "Bullet Quality", "value": "<score or rating>", "note": "<brief note>", "status": "good|warn|bad"},
+    {"label": "Keyword Density", "value": "<score or rating>", "note": "<brief note>", "status": "good|warn|bad"},
+    {"label": "Benefit Clarity", "value": "<score or rating>", "note": "<brief note>", "status": "good|warn|bad"},
+    {"label": "Character Count", "value": "<actual count or range>", "note": "<brief note>", "status": "good|warn|bad"},
+    {"label": "Mobile Readability", "value": "<Good|Fair|Poor>", "note": "<brief note>", "status": "good|warn|bad"}
+  ],
+  "wins": ["<thing done well 1>", "<thing done well 2>", "<thing done well 3>"],
+  "fixes": ["<specific fix 1>", "<specific fix 2>", "<specific fix 3>", "<specific fix 4>"],
+  "keywords_present": ["<keyword1>", "<keyword2>", "<keyword3>", "<keyword4>", "<keyword5>"],
+  "keywords_missing": ["<missing kw1>", "<missing kw2>", "<missing kw3>", "<missing kw4>"],
+  "pixii_pitch": "<1 sentence about how Pixii's AI design would visually bring this listing to life and fix these gaps instantly>"
+}`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    clearTimeout(loadTimer);
+    document.getElementById('loading').classList.remove('show');
+    document.querySelector('.btn').disabled = false;
+
+    if (!response.ok) {
+      const err = await response.json();
+      showError(`API error: ${err.error?.message || response.statusText}`);
+      return;
+    }
+
+    const data = await response.json();
+    const raw = data.content?.[0]?.text || '';
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    renderResults(parsed);
+
+  } catch (err) {
+    clearTimeout(loadTimer);
+    document.getElementById('loading').classList.remove('show');
+    document.querySelector('.btn').disabled = false;
+    showError(`Error: ${err.message}. Check your connection and try again.`);
+  }
+}
+
+// Allow Cmd/Ctrl+Enter to submit
+document.getElementById('listing').addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') analyzeListing();
+});
+</script>
+</body>
+</html>
